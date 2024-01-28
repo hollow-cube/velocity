@@ -82,6 +82,7 @@ import com.velocitypowered.proxy.protocol.packet.TransferPacket;
 import com.velocitypowered.proxy.protocol.packet.chat.ChatQueue;
 import com.velocitypowered.proxy.protocol.packet.chat.ChatType;
 import com.velocitypowered.proxy.protocol.packet.chat.ComponentHolder;
+import com.velocitypowered.proxy.protocol.packet.chat.SystemChatPacket;
 import com.velocitypowered.proxy.protocol.packet.chat.PlayerChatCompletionPacket;
 import com.velocitypowered.proxy.protocol.packet.chat.builder.ChatBuilderFactory;
 import com.velocitypowered.proxy.protocol.packet.chat.builder.ChatBuilderV2;
@@ -111,6 +112,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import net.kyori.adventure.audience.MessageType;
@@ -190,6 +192,8 @@ public class ConnectedPlayer implements MinecraftConnectionAssociation, Player, 
   private @Nullable ClientSettingsPacket clientSettingsPacket;
   private final ChatQueue chatQueue;
   private final ChatBuilderFactory chatBuilderFactory;
+
+  private final List<SystemChatPacket> oldMessages = new CopyOnWriteArrayList<>();
 
   ConnectedPlayer(VelocityServer server, GameProfile profile, MinecraftConnection connection,
                   @Nullable InetSocketAddress virtualHost, @Nullable String rawVirtualHost, boolean onlineMode,
@@ -928,6 +932,8 @@ public class ConnectedPlayer implements MinecraftConnectionAssociation, Player, 
       connectedServer.disconnect();
     }
 
+    oldMessages.clear();
+
     Optional<Player> connectedPlayer = server.getPlayer(this.getUniqueId());
     server.unregisterConnection(this);
 
@@ -1296,6 +1302,21 @@ public class ConnectedPlayer implements MinecraftConnectionAssociation, Player, 
           logger.error("Error switching player connection to config state", ex);
           return null;
         });
+  }
+
+  public void addMessageToReplayQueue(SystemChatPacket message) {
+    oldMessages.add(message);
+
+    // Trim old messages - we only replay the last 50
+    while (oldMessages.size() > 50) {
+      oldMessages.remove(0);
+    }
+  }
+
+  public void replayOldMessages() {
+    for (var message : oldMessages) {
+      connection.write(message);
+    }
   }
 
   /**

@@ -48,7 +48,12 @@ public class SystemChatPacket implements MinecraftPacket {
   public void decode(ByteBuf buf, ProtocolUtils.Direction direction, ProtocolVersion version) {
     component = ComponentHolder.read(buf, version);
     // System chat is never decoded so this doesn't matter for now
-    type = ChatType.values()[ProtocolUtils.readVarInt(buf)];
+    // Well it does now! Why didn't you guys just implement it properly in the first place? - Bardy
+    if (version.noLessThan(ProtocolVersion.MINECRAFT_1_19_1)) {
+      type = buf.readBoolean() ? ChatType.GAME_INFO : ChatType.SYSTEM;
+    } else {
+      type = ChatType.values()[ProtocolUtils.readVarInt(buf)];
+    }
   }
 
   @Override
@@ -63,7 +68,7 @@ public class SystemChatPacket implements MinecraftPacket {
           buf.writeBoolean(true);
           break;
         default:
-          throw new IllegalArgumentException("Invalid chat type");
+          throw new IllegalArgumentException("Invalid chat type " + type);
       }
     } else {
       ProtocolUtils.writeVarInt(buf, type.getId());
