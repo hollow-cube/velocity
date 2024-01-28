@@ -17,6 +17,7 @@
 
 package com.velocitypowered.proxy.connection.backend;
 
+import com.velocitypowered.api.event.connection.PluginMessageEvent;
 import com.velocitypowered.api.event.connection.PreTransferEvent;
 import com.velocitypowered.api.event.player.CookieRequestEvent;
 import com.velocitypowered.api.event.player.CookieStoreEvent;
@@ -24,6 +25,7 @@ import com.velocitypowered.api.event.player.PlayerResourcePackStatusEvent;
 import com.velocitypowered.api.event.player.ServerResourcePackRemoveEvent;
 import com.velocitypowered.api.event.player.ServerResourcePackSendEvent;
 import com.velocitypowered.api.network.ProtocolVersion;
+import com.velocitypowered.api.proxy.messages.MinecraftChannelIdentifier;
 import com.velocitypowered.api.proxy.player.ResourcePackInfo;
 import com.velocitypowered.proxy.VelocityServer;
 import com.velocitypowered.proxy.connection.MinecraftConnection;
@@ -54,6 +56,7 @@ import com.velocitypowered.proxy.protocol.packet.config.RegistrySyncPacket;
 import com.velocitypowered.proxy.protocol.packet.config.StartUpdatePacket;
 import com.velocitypowered.proxy.protocol.packet.config.TagsUpdatePacket;
 import com.velocitypowered.proxy.protocol.util.PluginMessageUtil;
+import io.netty.buffer.ByteBufUtil;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.concurrent.CompletableFuture;
@@ -261,6 +264,20 @@ public class ConfigSessionHandler implements MinecraftSessionHandler {
           PluginMessageUtil.rewriteMinecraftBrand(packet, server.getVersion(),
               serverConn.getPlayer().getProtocolVersion()));
     } else {
+      MinecraftConnection playerConnection = serverConn.getPlayer().getConnection();
+
+      byte[] copy = ByteBufUtil.getBytes(packet.content());
+      PluginMessageEvent event = new PluginMessageEvent(serverConn, serverConn.getPlayer(),
+              MinecraftChannelIdentifier.from(packet.getChannel()), copy);
+      server.getEventManager().fire(event).thenAcceptAsync(pme -> {
+        if (pme.getResult().isAllowed() && !playerConnection.isClosed()) {
+          throw new UnsupportedOperationException("Not supported yet. Handle the event.");
+        }
+      }, playerConnection.eventLoop()).exceptionally((ex) -> {
+        logger.error("Exception while handling plugin message {}", packet, ex);
+        return null;
+      });
+
       serverConn.getPlayer().getConnection().write(packet.retain());
     }
     return true;
