@@ -109,6 +109,10 @@ public interface MinecraftSessionHandler {
 
   }
 
+  default void activatedNoReconfigure() {
+
+  }
+
   default void deactivated() {
 
   }

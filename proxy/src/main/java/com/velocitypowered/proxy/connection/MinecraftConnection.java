@@ -459,8 +459,21 @@ public class MinecraftConnection extends ChannelInboundHandlerAdapter {
     }
     this.sessionHandlers.put(registry, sessionHandler);
     this.activeSessionHandler = sessionHandler;
+
+    StateRegistry oldState = this.state;
     setState(registry);
+
     sessionHandler.activated();
+
+    // Reconfiguring happens when we go back into configuration from play and then from
+    // configuration back to play
+    // We don't want to resend the brand or any of the channels on reconfigure - they are
+    // already registered
+    boolean isReconfigure = (oldState == StateRegistry.PLAY && registry == StateRegistry.CONFIG)
+                            || (oldState == StateRegistry.CONFIG && registry == StateRegistry.PLAY);
+    if (!isReconfigure) {
+      sessionHandler.activatedNoReconfigure();
+    }
   }
 
   /**
